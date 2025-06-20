@@ -45,4 +45,6 @@ val migrations: List<Migration>
         EnumsMigration(),
         TrustExtensionRepositoryMigration(),
         VideoPlayerPreferenceMigration(),
+        VideoOrientationMigration(),
+        PEMFileMigration(),
     )

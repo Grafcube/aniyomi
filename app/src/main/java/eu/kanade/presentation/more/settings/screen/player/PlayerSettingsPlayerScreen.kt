@@ -1,6 +1,5 @@
 package eu.kanade.presentation.more.settings.screen.player
 
-import android.content.pm.ActivityInfo
 import android.os.Build
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,6 +29,7 @@ import eu.kanade.tachiyomi.ui.player.MX_PLAYER
 import eu.kanade.tachiyomi.ui.player.MX_PLAYER_FREE
 import eu.kanade.tachiyomi.ui.player.MX_PLAYER_PRO
 import eu.kanade.tachiyomi.ui.player.NEXT_PLAYER
+import eu.kanade.tachiyomi.ui.player.PlayerOrientation
 import eu.kanade.tachiyomi.ui.player.VLC_PLAYER
 import eu.kanade.tachiyomi.ui.player.WEB_VIDEO_CASTER
 import eu.kanade.tachiyomi.ui.player.X_PLAYER
@@ -45,6 +45,7 @@ import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.text.NumberFormat
 
 object PlayerSettingsPlayerScreen : SearchableSettings {
 
@@ -77,17 +78,17 @@ object PlayerSettingsPlayerScreen : SearchableSettings {
                 pref = playerPreferences.preserveWatchingPosition(),
                 title = stringResource(MR.strings.pref_preserve_watching_position),
             ),
-            Preference.PreferenceItem.SwitchPreference(
-                pref = playerPreferences.playerFullscreen(),
-                title = stringResource(MR.strings.pref_player_fullscreen),
-                enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P,
+            Preference.PreferenceItem.ListPreference(
+                pref = playerPreferences.defaultPlayerOrientationType(),
+                title = stringResource(MR.strings.pref_category_player_orientation),
+                entries = PlayerOrientation.entries.associateWith {
+                    stringResource(it.titleRes)
+                }.toPersistentMap(),
             ),
-            Preference.PreferenceItem.SwitchPreference(
-                pref = playerPreferences.hideControls(),
-                title = stringResource(MR.strings.pref_player_hide_controls),
-            ),
-            getVolumeAndBrightnessGroup(playerPreferences = playerPreferences),
-            getOrientationGroup(playerPreferences = playerPreferences),
+            getControlsGroup(playerPreferences = playerPreferences),
+            getHosterGroup(playerPreferences = playerPreferences),
+            getDisplayGroup(playerPreferences = playerPreferences),
+            getIntroSkipGroup(playerPreferences = playerPreferences),
             if (deviceSupportsPip) getPipGroup(playerPreferences = playerPreferences) else null,
             getExternalPlayerGroup(
                 playerPreferences = playerPreferences,
@@ -98,17 +99,28 @@ object PlayerSettingsPlayerScreen : SearchableSettings {
     }
 
     @Composable
-    private fun getVolumeAndBrightnessGroup(playerPreferences: PlayerPreferences): Preference.PreferenceGroup {
-        val enableVolumeBrightnessGestures = playerPreferences.gestureVolumeBrightness()
+    private fun getControlsGroup(playerPreferences: PlayerPreferences): Preference.PreferenceGroup {
+        val allowGestures = playerPreferences.allowGestures()
+        val showLoading = playerPreferences.showLoadingCircle()
+        val showChapter = playerPreferences.showCurrentChapter()
         val rememberPlayerBrightness = playerPreferences.rememberPlayerBrightness()
         val rememberPlayerVolume = playerPreferences.rememberPlayerVolume()
 
         return Preference.PreferenceGroup(
-            title = stringResource(MR.strings.pref_category_volume_brightness),
+            title = stringResource(MR.strings.pref_category_controls),
             preferenceItems = persistentListOf(
                 Preference.PreferenceItem.SwitchPreference(
-                    pref = enableVolumeBrightnessGestures,
-                    title = stringResource(MR.strings.enable_volume_brightness_gestures),
+                    pref = allowGestures,
+                    title = stringResource(MR.strings.pref_controls_allow_gestures_in_panels),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    pref = showLoading,
+                    title = stringResource(MR.strings.pref_controls_show_loading),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    pref = showChapter,
+                    title = stringResource(MR.strings.pref_controls_show_chapter_indicator),
+                    subtitle = stringResource(MR.strings.pref_controls_show_chapter_indicator_info),
                 ),
                 Preference.PreferenceItem.SwitchPreference(
                     pref = rememberPlayerBrightness,
@@ -123,75 +135,141 @@ object PlayerSettingsPlayerScreen : SearchableSettings {
     }
 
     @Composable
-    private fun getOrientationGroup(playerPreferences: PlayerPreferences): Preference.PreferenceGroup {
-        val defaultPlayerOrientationType = playerPreferences.defaultPlayerOrientationType()
-        val adjustOrientationVideoDimensions = playerPreferences.adjustOrientationVideoDimensions()
-        val defaultPlayerOrientationPortrait = playerPreferences.defaultPlayerOrientationPortrait()
-        val defaultPlayerOrientationLandscape = playerPreferences.defaultPlayerOrientationLandscape()
+    private fun getHosterGroup(playerPreferences: PlayerPreferences): Preference.PreferenceGroup {
+        val showFailure = playerPreferences.showFailedHosters()
+        val showEmpty = playerPreferences.showEmptyHosters()
 
         return Preference.PreferenceGroup(
-            title = stringResource(MR.strings.pref_category_player_orientation),
+            title = stringResource(MR.strings.pref_hosters),
             preferenceItems = persistentListOf(
-                Preference.PreferenceItem.ListPreference(
-                    pref = defaultPlayerOrientationType,
-                    title = stringResource(MR.strings.pref_default_player_orientation),
-                    entries = persistentMapOf(
-                        ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR to stringResource(
-                            MR.strings.rotation_free,
-                        ),
-                        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT to stringResource(
-                            MR.strings.rotation_portrait,
-                        ),
-                        ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT to stringResource(
-                            MR.strings.rotation_reverse_portrait,
-                        ),
-                        ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE to stringResource(
-                            MR.strings.rotation_landscape,
-                        ),
-                        ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE to stringResource(
-                            MR.strings.rotation_reverse_landscape,
-                        ),
-                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT to stringResource(
-                            MR.strings.rotation_sensor_portrait,
-                        ),
-                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE to stringResource(
-                            MR.strings.rotation_sensor_landscape,
-                        ),
-                    ),
+                Preference.PreferenceItem.SwitchPreference(
+                    pref = showFailure,
+                    title = stringResource(MR.strings.pref_hosters_show_failure),
                 ),
                 Preference.PreferenceItem.SwitchPreference(
-                    pref = adjustOrientationVideoDimensions,
-                    title = stringResource(MR.strings.pref_adjust_orientation_video_dimensions),
+                    pref = showEmpty,
+                    title = stringResource(MR.strings.pref_hosters_show_empty),
+                ),
+            ),
+        )
+    }
+
+    @Composable
+    private fun getDisplayGroup(playerPreferences: PlayerPreferences): Preference.PreferenceGroup {
+        val fullScreen = playerPreferences.playerFullscreen()
+        val hideControls = playerPreferences.hideControls()
+        val displayVol = playerPreferences.displayVolPer()
+        val showSystemBar = playerPreferences.showSystemStatusBar()
+        val reduceMotion = playerPreferences.reduceMotion()
+        val hideTime = playerPreferences.playerTimeToDisappear()
+
+        val panelOpacityPref = playerPreferences.panelOpacity()
+        val panelOpacity by panelOpacityPref.collectAsState()
+        val numberFormat = remember { NumberFormat.getPercentInstance() }
+
+        return Preference.PreferenceGroup(
+            title = stringResource(MR.strings.pref_category_display),
+            preferenceItems = persistentListOf(
+                Preference.PreferenceItem.SwitchPreference(
+                    pref = fullScreen,
+                    title = stringResource(MR.strings.pref_player_fullscreen),
+                    enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P,
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    pref = hideControls,
+                    title = stringResource(MR.strings.pref_player_hide_controls),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    pref = displayVol,
+                    title = stringResource(MR.strings.pref_controls_display_volume_percentage),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    pref = showSystemBar,
+                    title = stringResource(MR.strings.pref_show_system_bar),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    pref = reduceMotion,
+                    title = stringResource(MR.strings.pref_reduce_motion),
                 ),
                 Preference.PreferenceItem.ListPreference(
-                    pref = defaultPlayerOrientationPortrait,
-                    title = stringResource(MR.strings.pref_default_portrait_orientation),
-                    entries = persistentMapOf(
-                        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT to stringResource(
-                            MR.strings.rotation_portrait,
-                        ),
-                        ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT to stringResource(
-                            MR.strings.rotation_reverse_portrait,
-                        ),
-                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT to stringResource(
-                            MR.strings.rotation_sensor_portrait,
-                        ),
-                    ),
+                    pref = hideTime,
+                    title = stringResource(MR.strings.pref_player_time_to_disappear),
+                    entries = listOf(500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000).associateWith {
+                        stringResource(MR.strings.pref_player_time_to_disappear_summary, it)
+                    }.toPersistentMap(),
+                ),
+                Preference.PreferenceItem.SliderPreference(
+                    value = panelOpacity,
+                    title = stringResource(MR.strings.pref_panel_opacity),
+                    subtitle = numberFormat.format(panelOpacity / 100f),
+                    min = 0,
+                    max = 100,
+                    onValueChanged = {
+                        panelOpacityPref.set(it)
+                        true
+                    },
+                ),
+            ),
+        )
+    }
+
+    @Composable
+    private fun getIntroSkipGroup(playerPreferences: PlayerPreferences): Preference.PreferenceGroup {
+        val enableSkipIntro = playerPreferences.enableSkipIntro()
+        val isIntroSkipEnabled by enableSkipIntro.collectAsState()
+
+        val enableAutoAniSkip = playerPreferences.autoSkipIntro()
+        val enableNetflixAniSkip = playerPreferences.enableNetflixStyleIntroSkip()
+        val waitingTimeAniSkip = playerPreferences.waitingTimeIntroSkip()
+
+        // AniSkip
+        val enableAniSkip = playerPreferences.aniSkipEnabled()
+        val disableAniSkipChapters = playerPreferences.disableAniSkipOnChapters()
+        val isAniSkipEnabled by enableAniSkip.collectAsState()
+
+        return Preference.PreferenceGroup(
+            title = stringResource(MR.strings.pref_category_intro_skip),
+            preferenceItems = persistentListOf(
+                Preference.PreferenceItem.SwitchPreference(
+                    pref = enableSkipIntro,
+                    title = stringResource(MR.strings.pref_enable_intro_skip),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    pref = enableAutoAniSkip,
+                    title = stringResource(MR.strings.pref_enable_auto_skip_ani_skip),
+                    enabled = isIntroSkipEnabled,
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    pref = enableNetflixAniSkip,
+                    title = stringResource(MR.strings.pref_enable_netflix_style_aniskip),
+                    enabled = isIntroSkipEnabled,
                 ),
                 Preference.PreferenceItem.ListPreference(
-                    pref = defaultPlayerOrientationLandscape,
-                    title = stringResource(MR.strings.pref_default_landscape_orientation),
+                    pref = waitingTimeAniSkip,
+                    title = stringResource(MR.strings.pref_waiting_time_aniskip),
                     entries = persistentMapOf(
-                        ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE to stringResource(
-                            MR.strings.rotation_landscape,
-                        ),
-                        ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE to stringResource(
-                            MR.strings.rotation_reverse_landscape,
-                        ),
-                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE to stringResource(
-                            MR.strings.rotation_sensor_landscape,
-                        ),
+                        5 to stringResource(MR.strings.pref_waiting_time_aniskip_5),
+                        6 to stringResource(MR.strings.pref_waiting_time_aniskip_6),
+                        7 to stringResource(MR.strings.pref_waiting_time_aniskip_7),
+                        8 to stringResource(MR.strings.pref_waiting_time_aniskip_8),
+                        9 to stringResource(MR.strings.pref_waiting_time_aniskip_9),
+                        10 to stringResource(MR.strings.pref_waiting_time_aniskip_10),
                     ),
+                    enabled = isIntroSkipEnabled,
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    pref = enableAniSkip,
+                    title = stringResource(MR.strings.pref_enable_aniskip),
+                    enabled = isIntroSkipEnabled,
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    pref = disableAniSkipChapters,
+                    title = stringResource(MR.strings.pref_disable_aniskip_chapter),
+                    enabled = isIntroSkipEnabled && isAniSkipEnabled,
+                ),
+                Preference.PreferenceItem.InfoPreference(
+                    title = stringResource(MR.strings.pref_category_player_aniskip_info),
+                    enabled = isIntroSkipEnabled,
                 ),
             ),
         )
