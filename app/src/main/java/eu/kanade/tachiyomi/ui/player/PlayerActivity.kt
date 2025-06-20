@@ -49,6 +49,7 @@ import androidx.activity.viewModels
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -69,7 +70,6 @@ import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.data.torrentServer.TorrentServerApi
 import eu.kanade.tachiyomi.data.torrentServer.TorrentServerUtils
 import eu.kanade.tachiyomi.data.torrentServer.service.TorrentServerService
-import eu.kanade.tachiyomi.databinding.PlayerActivityBinding
 import eu.kanade.tachiyomi.databinding.PlayerLayoutBinding
 import eu.kanade.tachiyomi.network.NetworkPreferences
 import eu.kanade.tachiyomi.ui.base.activity.BaseActivity
@@ -116,7 +116,7 @@ class PlayerActivity : BaseActivity() {
     private val playerObserver by lazy { PlayerObserver(this) }
     val player by lazy { binding.player }
     val windowInsetsController by lazy { WindowCompat.getInsetsController(window, window.decorView) }
-    val audioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    val audioManager by lazy { getSystemService(AUDIO_SERVICE) as AudioManager }
 
     private var mediaSession: MediaSession? = null
     private val gesturePreferences: GesturePreferences by lazy { viewModel.gesturePreferences }
@@ -242,9 +242,11 @@ class PlayerActivity : BaseActivity() {
                     is PlayerViewModel.Event.SavedImage -> {
                         onSaveImageResult(event.result)
                     }
+
                     is PlayerViewModel.Event.ShareImage -> {
                         onShareImageResult(event.uri, event.seconds)
                     }
+
                     is PlayerViewModel.Event.SetCoverResult -> {
                         onSetAsCoverResult(event.result)
                     }
@@ -370,9 +372,9 @@ class PlayerActivity : BaseActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         binding.root.systemUiVisibility =
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-            View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_LOW_PROFILE
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_LOW_PROFILE
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
         windowInsetsController.hide(WindowInsetsCompat.Type.navigationBars())
         windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -580,9 +582,9 @@ class PlayerActivity : BaseActivity() {
         when (it) {
             AudioManager.AUDIOFOCUS_LOSS,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
-            -> {
+                -> {
                 val oldRestore = restoreAudioFocus
-                val wasPlayerPaused = player.paused ?: false
+                val wasPlayerPaused = player.paused == true
                 viewModel.pause()
                 restoreAudioFocus = {
                     oldRestore()
@@ -646,6 +648,7 @@ class PlayerActivity : BaseActivity() {
                 viewModel.updatePlayBackPos(value.toFloat())
                 viewModel.setChapter(value.toFloat())
             }
+
             "demuxer-cache-time" -> viewModel.updateReadAhead(value = value)
             "volume" -> viewModel.setMPVVolume(value.toInt())
             "volume-max" -> viewModel.volumeBoostCap = value.toInt() - 100
@@ -662,6 +665,7 @@ class PlayerActivity : BaseActivity() {
                 viewModel.loadChapters()
                 viewModel.updateChapter(0)
             }
+
             "track-list" -> viewModel.loadTracks()
         }
     }
@@ -713,6 +717,7 @@ class PlayerActivity : BaseActivity() {
             "secondary-sid" -> trackId(value)?.let {
                 viewModel.updateSubtitle(viewModel.selectedSubtitles.value.first, it)
             }
+
             "hwdec", "hwdec-current" -> viewModel.getDecoder()
             "user-data/aniyomi" -> viewModel.handleLuaInvocation(property, value)
         }
@@ -733,6 +738,7 @@ class PlayerActivity : BaseActivity() {
             MPVLib.mpvEventId.MPV_EVENT_FILE_LOADED -> {
                 viewModel.viewModelScope.launchIO { fileLoaded() }
             }
+
             MPVLib.mpvEventId.MPV_EVENT_SEEK -> viewModel.isLoading.update { true }
             MPVLib.mpvEventId.MPV_EVENT_PLAYBACK_RESTART -> player.isExiting = false
         }
@@ -756,7 +762,7 @@ class PlayerActivity : BaseActivity() {
         builder.setActions(
             createPipActions(
                 context = this,
-                isPaused = player.paused ?: true,
+                isPaused = player.paused != false,
                 replaceWithPrevious = playerPreferences.pipReplaceWithPrevious().get(),
                 playlistCount = viewModel.currentPlaylist.value.size,
                 playlistPosition = viewModel.getCurrentEpisodeIndex(),
@@ -834,10 +840,12 @@ class PlayerActivity : BaseActivity() {
                 viewModel.changeVolumeBy(1)
                 viewModel.displayVolumeSlider()
             }
+
             KeyEvent.KEYCODE_VOLUME_DOWN -> {
                 viewModel.changeVolumeBy(-1)
                 viewModel.displayVolumeSlider()
             }
+
             KeyEvent.KEYCODE_DPAD_RIGHT -> viewModel.handleLeftDoubleTap()
             KeyEvent.KEYCODE_DPAD_LEFT -> viewModel.handleRightDoubleTap()
             KeyEvent.KEYCODE_SPACE -> viewModel.pauseUnpause()
@@ -877,6 +885,7 @@ class PlayerActivity : BaseActivity() {
                                 viewModel.unpause()
                                 window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                             }
+
                             SingleActionGesture.Custom -> {
                                 MPVLib.command(arrayOf("keypress", CustomKeyCodes.MediaPlay.keyCode))
                             }
@@ -894,6 +903,7 @@ class PlayerActivity : BaseActivity() {
                                 viewModel.pause()
                                 window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                             }
+
                             SingleActionGesture.Custom -> {
                                 MPVLib.command(arrayOf("keypress", CustomKeyCodes.MediaPlay.keyCode))
                             }
@@ -908,9 +918,11 @@ class PlayerActivity : BaseActivity() {
                             SingleActionGesture.Seek -> {
                                 viewModel.leftSeek()
                             }
+
                             SingleActionGesture.PlayPause -> {
                                 viewModel.pauseUnpause()
                             }
+
                             SingleActionGesture.Custom -> {
                                 MPVLib.command(arrayOf("keypress", CustomKeyCodes.MediaPrevious.keyCode))
                             }
@@ -925,9 +937,11 @@ class PlayerActivity : BaseActivity() {
                             SingleActionGesture.Seek -> {
                                 viewModel.rightSeek()
                             }
+
                             SingleActionGesture.PlayPause -> {
                                 viewModel.pauseUnpause()
                             }
+
                             SingleActionGesture.Custom -> {
                                 MPVLib.command(arrayOf("keypress", CustomKeyCodes.MediaNext.keyCode))
                             }
@@ -1015,6 +1029,7 @@ class PlayerActivity : BaseActivity() {
                                     MR.strings.no_hosters,
                                 ),
                             )
+
                             else -> {
                                 viewModel.loadHosters(
                                     source = switchMethod.source,
@@ -1084,7 +1099,7 @@ class PlayerActivity : BaseActivity() {
     }
 
     fun parseVideoUrl(videoUrl: String?): String? {
-        return Uri.parse(videoUrl).resolveUri(this)
+        return videoUrl?.toUri()?.resolveUri(this)
             ?: videoUrl
     }
 
@@ -1133,6 +1148,7 @@ class PlayerActivity : BaseActivity() {
             is PlayerViewModel.SaveImageResult.Success -> {
                 toast(MR.strings.picture_saved)
             }
+
             is PlayerViewModel.SaveImageResult.Error -> {
                 logcat(LogPriority.ERROR, result.error)
             }
@@ -1171,7 +1187,7 @@ class PlayerActivity : BaseActivity() {
                 MPVLib.command(
                     arrayOf(
                         "seek",
-                        "${aniSkipInterval!!.first{it.skipType == skipType}.interval.endTime}",
+                        "${aniSkipInterval!!.first { it.skipType == skipType }.interval.endTime}",
                         "absolute",
                     ),
                 )
@@ -1204,9 +1220,9 @@ class PlayerActivity : BaseActivity() {
         val windowInsetsController by lazy { WindowInsetsControllerCompat(window, binding.root) }
         binding.root.systemUiVisibility =
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-            View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_LOW_PROFILE
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_LOW_PROFILE
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
         windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
@@ -1276,15 +1292,19 @@ class PlayerActivity : BaseActivity() {
                         PIP_PLAY -> {
                             player.paused = false
                         }
+
                         PIP_PAUSE -> {
                             player.paused = true
                         }
+
                         PIP_PREVIOUS -> {
                             changeEpisode(viewModel.getAdjacentEpisodeId(previous = true))
                         }
+
                         PIP_NEXT -> {
                             changeEpisode(viewModel.getAdjacentEpisodeId(previous = false))
                         }
+
                         PIP_SKIP -> {
                             doubleTapSeek(time = 10)
                         }
@@ -1413,7 +1433,8 @@ class PlayerActivity : BaseActivity() {
                 ParcelFileDescriptor.adoptFd(fd).close() // we don't need that anymore
                 return path
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
         // Else, pass the fd to mpv
         return "fdclose://$fd"
     }
